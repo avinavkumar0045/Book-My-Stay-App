@@ -1,49 +1,79 @@
 import java.util.*;
 /**
- * MAIN CLASS UseCase10BookingCancellation
- * Use Case 10: Booking Cancellation & Inventory Rollback
- * @version 10.1
+ * MAIN CLASS UseCase11ConcurrentBookingSimulation
+ * Use Case 11: Concurrent Booking Simulation (Thread Safety)
+ * @version 11.1
  */
 class RoomInventory {
     private Map<String, Integer> inventory;
+    private Map<String, Integer> counters;
     public RoomInventory() {
         inventory = new HashMap<>();
+        counters = new HashMap<>();
         inventory.put("Single", 5);
-        inventory.put("Double", 2);
-        inventory.put("Suite", 1);
+        inventory.put("Double", 3);
+        inventory.put("Suite", 2);
+        counters.put("Single", 0);
+        counters.put("Double", 0);
+        counters.put("Suite", 0);
     }
-    public void increaseAvailability(String roomType) {
-        inventory.put(roomType, inventory.get(roomType) + 1);
+    public synchronized String allocateRoom(String guest, String roomType) {
+        if (inventory.get(roomType) > 0) {
+            int count = counters.get(roomType) + 1;
+            counters.put(roomType, count);
+            inventory.put(roomType, inventory.get(roomType) - 1);
+            String roomId = roomType + "-" + count;
+            System.out.println(
+                    "Booking confirmed for Guest: "
+                            + guest
+                            + ", Room ID: "
+                            + roomId
+            );
+            return roomId;
+        }
+        return null;
     }
-    public int getAvailability(String roomType) {
-        return inventory.get(roomType);
+    public void displayInventory() {
+        System.out.println("\nRemaining Inventory:");
+        for (String type : inventory.keySet()) {
+            System.out.println(type + ": " + inventory.get(type));
+        }
     }
 }
-class CancellationService {
-    private Stack<String> rollbackStack;
-    public CancellationService() {
-        rollbackStack = new Stack<>();
+class BookingTask implements Runnable {
+    private RoomInventory inventory;
+    private String guestName;
+    private String roomType;
+    public BookingTask(RoomInventory inventory, String guestName, String roomType) {
+        this.inventory = inventory;
+        this.guestName = guestName;
+        this.roomType = roomType;
     }
-    public void cancelBooking(String reservationId, String roomType, RoomInventory inventory) {
-        rollbackStack.push(reservationId);
-        inventory.increaseAvailability(roomType);
-        System.out.println("Booking cancelled successfully. Inventory restored for room type: " + roomType);
-    }
-    public void displayRollbackHistory() {
-        System.out.println("\nRollback History (Most Recent First):");
-        while (!rollbackStack.isEmpty()) {
-            System.out.println("Released Reservation ID: " + rollbackStack.pop());
-        }
+    @Override
+    public void run() {
+        inventory.allocateRoom(guestName, roomType);
     }
 }
 public class mystayapp {
     public static void main(String[] args) {
-        System.out.println("Booking Cancellation");
+        System.out.println("Concurrent Booking Simulation");
         RoomInventory inventory = new RoomInventory();
-        CancellationService service = new CancellationService();
-        service.cancelBooking("Single-1", "Single", inventory);
-        service.displayRollbackHistory();
-        System.out.println("\nUpdated Single Room Availability: "
-                + inventory.getAvailability("Single"));
+        Thread t1 = new Thread(new BookingTask(inventory, "Abhi", "Single"));
+        Thread t2 = new Thread(new BookingTask(inventory, "Vanmathi", "Double"));
+        Thread t3 = new Thread(new BookingTask(inventory, "Kural", "Suite"));
+        Thread t4 = new Thread(new BookingTask(inventory, "Subha", "Single"));
+        t1.start();
+        t2.start();
+        t3.start();
+        t4.start();
+        try {
+            t1.join();
+            t2.join();
+            t3.join();
+            t4.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        inventory.displayInventory();
     }
 }
